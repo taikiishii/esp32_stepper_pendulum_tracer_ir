@@ -1,6 +1,16 @@
 #include <Wire.h>
 #include <SSD1306.h>//ディスプレイ用ライブラリを読み込み
-#include "fastestDigitalWrite.hpp"
+
+// 高速デジタル出力（ESP32専用）
+inline void digitalWriteFastESP32(uint8_t pin, bool val) {
+  if (pin < 32) {
+    if (val) GPIO.out_w1ts = (1UL << pin);
+    else     GPIO.out_w1tc = (1UL << pin);
+  } else {
+    if (val) GPIO.out1_w1ts.val = (1UL << (pin - 32));
+    else     GPIO.out1_w1tc.val = (1UL << (pin - 32));
+  }
+}
 
 // ピンアサイン
 #define DIR_R 32
@@ -239,22 +249,22 @@ void change_mode() {
 void IRAM_ATTR onTimer1() {
   countL += motorL * MICRO_STEP * STEPS / 480;
   if (countL > 5000) {
-    fastestDigitalWrite(STEP_L, outL);
+    digitalWriteFastESP32(STEP_L, outL);
     outL = !outL;
     countL -= 5000;
   } else if (countL < -5000) {
-    fastestDigitalWrite(STEP_L, outL);
+    digitalWriteFastESP32(STEP_L, outL);
     outL = !outL;
     countL += 5000;
   }
 
   countR += motorR * MICRO_STEP * STEPS / 480;
   if (countR > 5000) {
-    fastestDigitalWrite(STEP_R, outR);
+    digitalWriteFastESP32(STEP_R, outR);
     outR = !outR;
     countR -= 5000;
   } else if (countR < -5000) {
-    fastestDigitalWrite(STEP_R, outR);
+    digitalWriteFastESP32(STEP_R, outR);
     outR = !outR;
     countR += 5000;
   }
@@ -581,7 +591,7 @@ void setup() {
   lastUptime = micros();
 
   // ステッピングモータを有効化
-  digitalWrite(EN, LOW);
+  digitalWriteFastESP32(EN, LOW);
 
   // 割込みタイマの設定
   timerSemaphore1 = xSemaphoreCreateBinary();
@@ -648,13 +658,13 @@ void loop() {
     motorR = constrain(motorR, 0 - LIMIT * MICRO_STEP, LIMIT * MICRO_STEP);
 
     // ステッピングモータの回転方向を指定
-    digitalWrite(DIR_L, (motorL < 0));
-    digitalWrite(DIR_R, (motorR < 0));
+    digitalWriteFastESP32(DIR_L, (motorL < 0));
+    digitalWriteFastESP32(DIR_R, (motorR < 0));
 
     // 倒れたらモーター停止
     if (45 < abs(degY - lpfY)) {
       controlSpeed = 0;
-      digitalWrite(EN, HIGH);
+      digitalWriteFastESP32(EN, HIGH);
       Serial.println("*********************STOP***********************");
       Serial.println((lastUptime - startTime) / 1000000);
       display.init();
@@ -699,7 +709,7 @@ void loop() {
       lowBatteryCount += 1;
       if (lowBatteryCount > 5) {  // 5回連続で閾値を下回ったら停止
         controlSpeed = 0;
-        digitalWrite(EN, HIGH);
+        digitalWriteFastESP32(EN, HIGH);
         Serial.print("LOW BATTERY.");
         Serial.println(batteryMonitor);
         sprintf(displayBuffer, "%d", batteryMonitor);
